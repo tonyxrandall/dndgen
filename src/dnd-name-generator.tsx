@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Sparkles, RefreshCw, Copy, Check, Dice6, Wand2 } from 'lucide-react';
+import { Sparkles, RefreshCw, Copy, Check, Dice6, Wand2, Sword, Shield, User, Scroll } from 'lucide-react';
 
 const DnDGenerator = () => {
   const [character, setCharacter] = useState(null);
   const [selectedRace, setSelectedRace] = useState('random');
   const [selectedClass, setSelectedClass] = useState('random');
+  const [selectedLevel, setSelectedLevel] = useState('1');
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generatingBackstory, setGeneratingBackstory] = useState(false);
@@ -20,6 +21,18 @@ const DnDGenerator = () => {
     'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter',
     'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer',
     'Warlock', 'Wizard', 'Artificer', 'Blood Hunter'
+  ];
+
+  const alignments = [
+    'Lawful Good', 'Neutral Good', 'Chaotic Good',
+    'Lawful Neutral', 'True Neutral', 'Chaotic Neutral',
+    'Lawful Evil', 'Neutral Evil', 'Chaotic Evil'
+  ];
+
+  const backgrounds = [
+    'Acolyte', 'Charlatan', 'Criminal', 'Entertainer', 'Folk Hero',
+    'Guild Artisan', 'Hermit', 'Noble', 'Outlander', 'Sage',
+    'Sailor', 'Soldier', 'Urchin', 'Far Traveler', 'Haunted One'
   ];
 
   const namesByRace = {
@@ -123,7 +136,28 @@ const DnDGenerator = () => {
     return `${firstName} ${lastName}`;
   };
 
-  const generateAIBackstory = async (name, race, charClass, trait) => {
+  const rollStats = () => {
+    const rollDice = () => {
+      const rolls = [
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1
+      ].sort((a, b) => b - a);
+      return rolls[0] + rolls[1] + rolls[2]; // Drop lowest
+    };
+
+    return {
+      strength: rollDice(),
+      dexterity: rollDice(),
+      constitution: rollDice(),
+      intelligence: rollDice(),
+      wisdom: rollDice(),
+      charisma: rollDice()
+    };
+  };
+
+  const generateAIContent = async (name, race, charClass, trait, level, alignment, background, stats) => {
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -132,42 +166,57 @@ const DnDGenerator = () => {
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
+          max_tokens: 1500,
           messages: [
             {
               role: "user",
-              content: `You are a creative D&D storyteller. Generate a unique and compelling backstory for this character:
+              content: `You are a creative D&D storyteller. Generate content for this character:
 
 Name: ${name}
 Race: ${race}
 Class: ${charClass}
+Level: ${level}
+Alignment: ${alignment}
+Background: ${background}
 Personality Trait: ${trait}
+Stats: STR ${stats.strength}, DEX ${stats.dexterity}, CON ${stats.constitution}, INT ${stats.intelligence}, WIS ${stats.wisdom}, CHA ${stats.charisma}
 
-Requirements:
-- Write 2-3 sentences that tell a complete story
-- Include specific details (names of places, events, people, or organizations)
-- Make it dramatic and emotionally engaging
-- Incorporate the personality trait naturally
-- Make it feel like this character has lived a real life with struggles and triumphs
-- Avoid generic phrases like "seeks adventure" or "left home"
-- Make every backstory completely unique and original
+Generate the following in JSON format:
+{
+  "backstory": "2-3 compelling sentences with specific details about their past",
+  "equipment": ["item1", "item2", "item3", "item4", "item5"],
+  "voiceAccent": "A creative description of how they speak (1 sentence)",
+  "portrait": "A detailed visual description for AI art generation (2 sentences, be specific about appearance, clothing, pose, and mood)"
+}
 
-Write only the backstory, nothing else.`
+Make the backstory dramatic and incorporate their alignment and background. List 5 appropriate equipment items for their class and level. The voice/accent should match their background and personality. The portrait description should be vivid and specific.
+
+Respond ONLY with valid JSON, no other text.`
             }
           ],
         })
       });
 
       const data = await response.json();
-      const backstory = data.content
+      const text = data.content
         .filter(item => item.type === "text")
         .map(item => item.text)
-        .join("\n");
+        .join("\n")
+        .trim();
       
-      return backstory.trim();
+      // Clean JSON formatting
+      const cleanText = text.replace(/```json\n?|```\n?/g, '').trim();
+      const parsed = JSON.parse(cleanText);
+      
+      return parsed;
     } catch (error) {
-      console.error("Error generating backstory:", error);
-      return "A mysterious figure whose past remains shrouded in shadow, seeking purpose in a world full of danger and opportunity.";
+      console.error("Error generating content:", error);
+      return {
+        backstory: "A mysterious figure whose past remains shrouded in shadow, seeking purpose in a world full of danger and opportunity.",
+        equipment: ["Backpack", "Bedroll", "Rations (5 days)", "Waterskin", "Rope (50 ft)"],
+        voiceAccent: "Speaks with confidence and clarity.",
+        portrait: "A determined adventurer standing ready for action. Their equipment is well-maintained and their posture suggests experience."
+      };
     }
   };
 
@@ -182,29 +231,47 @@ Write only the backstory, nothing else.`
       ? classes[Math.floor(Math.random() * classes.length)]
       : selectedClass;
 
+    const level = parseInt(selectedLevel);
+    const alignment = alignments[Math.floor(Math.random() * alignments.length)];
+    const background = backgrounds[Math.floor(Math.random() * backgrounds.length)];
     const name = generateName(race);
     const trait = traits[Math.floor(Math.random() * traits.length)];
+    const stats = rollStats();
 
     // Set character immediately with loading state
     setCharacter({
       name,
       race,
       class: charClass,
+      level,
+      alignment,
+      background,
+      stats,
       backstory: "Conjuring your character's tale...",
+      equipment: [],
+      voiceAccent: "Determining voice...",
+      portrait: "Envisioning appearance...",
       trait,
       loading: true
     });
 
     setGenerating(false);
 
-    // Generate backstory in background
-    const backstory = await generateAIBackstory(name, race, charClass, trait);
+    // Generate AI content in background
+    const aiContent = await generateAIContent(name, race, charClass, trait, level, alignment, background, stats);
     
     setCharacter({
       name,
       race,
       class: charClass,
-      backstory,
+      level,
+      alignment,
+      background,
+      stats,
+      backstory: aiContent.backstory,
+      equipment: aiContent.equipment,
+      voiceAccent: aiContent.voiceAccent,
+      portrait: aiContent.portrait,
       trait,
       loading: false
     });
@@ -214,11 +281,27 @@ Write only the backstory, nothing else.`
     if (!character) return;
     
     const text = `${character.name}
-${character.race} ${character.class}
+Level ${character.level} ${character.race} ${character.class}
+${character.alignment} • ${character.background}
 
+STATS:
+STR ${character.stats.strength} | DEX ${character.stats.dexterity} | CON ${character.stats.constitution}
+INT ${character.stats.intelligence} | WIS ${character.stats.wisdom} | CHA ${character.stats.charisma}
+
+BACKSTORY:
 ${character.backstory}
 
-Trait: ${character.trait}`;
+PERSONALITY:
+${character.trait}
+
+VOICE:
+${character.voiceAccent}
+
+EQUIPMENT:
+${character.equipment.map(item => `• ${item}`).join('\n')}
+
+APPEARANCE:
+${character.portrait}`;
     
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -233,38 +316,60 @@ Trait: ${character.trait}`;
     });
   };
 
-  const regenerateBackstory = async () => {
+  const regenerateStats = () => {
     if (!character) return;
-    
-    setGeneratingBackstory(true);
-    const newTrait = traits[Math.floor(Math.random() * traits.length)];
+    setCharacter({
+      ...character,
+      stats: rollStats()
+    });
+  };
+
+  const regenerateContent = async () => {
+    if (!character) return;
     
     setCharacter({
       ...character,
-      backstory: "Conjuring a new tale...",
-      trait: newTrait,
+      backstory: "Conjuring new tale...",
+      equipment: [],
+      voiceAccent: "Determining voice...",
+      portrait: "Envisioning appearance...",
       loading: true
     });
 
-    const backstory = await generateAIBackstory(
+    const newTrait = traits[Math.floor(Math.random() * traits.length)];
+    const aiContent = await generateAIContent(
       character.name,
       character.race,
       character.class,
-      newTrait
+      newTrait,
+      character.level,
+      character.alignment,
+      character.background,
+      character.stats
     );
     
     setCharacter({
       ...character,
-      backstory,
+      backstory: aiContent.backstory,
+      equipment: aiContent.equipment,
+      voiceAccent: aiContent.voiceAccent,
+      portrait: aiContent.portrait,
       trait: newTrait,
       loading: false
     });
-    setGeneratingBackstory(false);
+  };
+
+  const getModifier = (stat) => {
+    return Math.floor((stat - 10) / 2);
+  };
+
+  const formatModifier = (mod) => {
+    return mod >= 0 ? `+${mod}` : `${mod}`;
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-2">
@@ -273,13 +378,13 @@ Trait: ${character.trait}`;
               D&D Character Generator
             </h1>
           </div>
-          <p className="text-purple-300 text-lg">Powered by AI • Infinite Possibilities</p>
-          <p className="text-purple-400 text-sm mt-1">Every backstory is unique and original</p>
+          <p className="text-purple-300 text-lg">Complete Character Builder • Powered by AI</p>
+          <p className="text-purple-400 text-sm mt-1">Stats, Equipment, Voice & More</p>
         </div>
 
         {/* Controls */}
         <div className="bg-black/30 backdrop-blur-md rounded-lg p-6 mb-6 border border-purple-500/30">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium mb-2 text-purple-300">Race</label>
               <select 
@@ -306,6 +411,18 @@ Trait: ${character.trait}`;
                 ))}
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium mb-2 text-purple-300">Level</label>
+              <select 
+                value={selectedLevel}
+                onChange={(e) => setSelectedLevel(e.target.value)}
+                className="w-full bg-slate-800 border border-purple-500/50 rounded px-4 py-2 text-white focus:outline-none focus:border-purple-400"
+              >
+                {[...Array(20)].map((_, i) => (
+                  <option key={i + 1} value={i + 1}>{i + 1}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <button
@@ -329,53 +446,142 @@ Trait: ${character.trait}`;
 
         {/* Character Card */}
         {character && (
-          <div className="bg-black/40 backdrop-blur-md rounded-lg p-6 border border-amber-500/30 shadow-2xl">
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h2 className="text-3xl font-bold text-amber-400">{character.name}</h2>
-                  <button
-                    onClick={regenerateName}
-                    className="text-purple-400 hover:text-purple-300 transition-colors"
-                    title="Regenerate name"
-                  >
-                    <RefreshCw size={18} />
-                  </button>
+          <div className="space-y-4">
+            {/* Header Section */}
+            <div className="bg-black/40 backdrop-blur-md rounded-lg p-6 border border-amber-500/30 shadow-2xl">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h2 className="text-4xl font-bold text-amber-400">{character.name}</h2>
+                    <button
+                      onClick={regenerateName}
+                      className="text-purple-400 hover:text-purple-300 transition-colors"
+                      title="Regenerate name"
+                    >
+                      <RefreshCw size={18} />
+                    </button>
+                  </div>
+                  <p className="text-2xl text-purple-300 mb-2">
+                    Level {character.level} {character.race} {character.class}
+                  </p>
+                  <div className="flex gap-3 text-sm">
+                    <span className="px-3 py-1 bg-purple-600/30 rounded-full border border-purple-400/50">
+                      {character.alignment}
+                    </span>
+                    <span className="px-3 py-1 bg-amber-600/30 rounded-full border border-amber-400/50">
+                      {character.background}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-xl text-purple-300">{character.race} {character.class}</p>
-              </div>
-              <button
-                onClick={copyToClipboard}
-                className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition-colors"
-                title="Copy to clipboard"
-              >
-                {copied ? <Check size={20} className="text-green-400" /> : <Copy size={20} />}
-              </button>
-            </div>
-
-            <div className="border-t border-purple-500/30 pt-4">
-              <div className="flex items-start gap-2 mb-3">
-                <h3 className="text-lg font-semibold text-amber-300 flex-shrink-0">Backstory</h3>
                 <button
-                  onClick={regenerateBackstory}
-                  disabled={generatingBackstory}
-                  className="text-purple-400 hover:text-purple-300 transition-colors mt-1 disabled:opacity-50"
-                  title="Regenerate backstory"
+                  onClick={copyToClipboard}
+                  className="bg-slate-700 hover:bg-slate-600 p-2 rounded-lg transition-colors"
+                  title="Copy to clipboard"
                 >
-                  <RefreshCw size={16} className={generatingBackstory ? "animate-spin" : ""} />
+                  {copied ? <Check size={20} className="text-green-400" /> : <Copy size={20} />}
                 </button>
               </div>
-              <p className={`text-gray-300 mb-4 leading-relaxed ${character.loading ? 'italic opacity-70' : ''}`}>
-                {character.backstory}
-              </p>
-              
-              <h3 className="text-lg font-semibold text-amber-300 mb-2">Personality Trait</h3>
-              <p className="text-gray-300 italic">"{character.trait}"</p>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-purple-500/30 flex items-center gap-2 text-sm text-purple-400">
+            {/* Stats Section */}
+            <div className="bg-black/40 backdrop-blur-md rounded-lg p-6 border border-purple-500/30">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Sword className="text-amber-400" size={20} />
+                  <h3 className="text-xl font-semibold text-amber-300">Ability Scores</h3>
+                </div>
+                <button
+                  onClick={regenerateStats}
+                  className="text-purple-400 hover:text-purple-300 transition-colors text-sm flex items-center gap-1"
+                  title="Reroll stats"
+                >
+                  <RefreshCw size={16} />
+                  Reroll
+                </button>
+              </div>
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
+                {Object.entries(character.stats).map(([stat, value]) => (
+                  <div key={stat} className="text-center bg-slate-800/50 rounded-lg p-3 border border-purple-500/30">
+                    <div className="text-xs uppercase text-purple-300 mb-1">
+                      {stat.substring(0, 3)}
+                    </div>
+                    <div className="text-2xl font-bold text-white">{value}</div>
+                    <div className="text-sm text-amber-400">
+                      {formatModifier(getModifier(value))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Story Section */}
+              <div className="bg-black/40 backdrop-blur-md rounded-lg p-6 border border-purple-500/30">
+                <div className="flex items-start gap-2 mb-3">
+                  <Scroll className="text-amber-400 mt-1" size={20} />
+                  <div className="flex-1">
+                    <h3 className="text-xl font-semibold text-amber-300">Backstory</h3>
+                  </div>
+                  <button
+                    onClick={regenerateContent}
+                    disabled={character.loading}
+                    className="text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50"
+                    title="Regenerate content"
+                  >
+                    <RefreshCw size={16} className={character.loading ? "animate-spin" : ""} />
+                  </button>
+                </div>
+                <p className={`text-gray-300 mb-4 leading-relaxed ${character.loading ? 'italic opacity-70' : ''}`}>
+                  {character.backstory}
+                </p>
+                
+                <h4 className="text-lg font-semibold text-amber-300 mb-2">Personality</h4>
+                <p className="text-gray-300 italic mb-4">"{character.trait}"</p>
+                
+                <h4 className="text-lg font-semibold text-amber-300 mb-2">Voice & Accent</h4>
+                <p className={`text-gray-300 ${character.loading ? 'italic opacity-70' : ''}`}>
+                  {character.voiceAccent}
+                </p>
+              </div>
+
+              {/* Equipment & Appearance */}
+              <div className="space-y-4">
+                {/* Equipment */}
+                <div className="bg-black/40 backdrop-blur-md rounded-lg p-6 border border-purple-500/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield className="text-amber-400" size={20} />
+                    <h3 className="text-xl font-semibold text-amber-300">Equipment</h3>
+                  </div>
+                  {character.loading ? (
+                    <p className="text-gray-300 italic opacity-70">Gathering equipment...</p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {character.equipment.map((item, index) => (
+                        <li key={index} className="flex items-start gap-2 text-gray-300">
+                          <span className="text-purple-400 mt-1">•</span>
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Appearance */}
+                <div className="bg-black/40 backdrop-blur-md rounded-lg p-6 border border-purple-500/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <User className="text-amber-400" size={20} />
+                    <h3 className="text-xl font-semibold text-amber-300">Appearance</h3>
+                  </div>
+                  <p className={`text-gray-300 leading-relaxed ${character.loading ? 'italic opacity-70' : ''}`}>
+                    {character.portrait}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-black/40 backdrop-blur-md rounded-lg p-4 border border-purple-500/30 flex items-center justify-center gap-2 text-sm text-purple-400">
               <Sparkles size={16} />
-              <span>AI-Generated • Completely Unique</span>
+              <span>AI-Generated • Completely Unique • Ready to Play</span>
             </div>
           </div>
         )}
@@ -385,7 +591,7 @@ Trait: ${character.trait}`;
           <div className="text-center py-16 text-purple-300">
             <Dice6 size={64} className="mx-auto mb-4 opacity-50" />
             <p className="text-xl mb-2">Roll the dice to create your character</p>
-            <p className="text-sm text-purple-400">Each backstory is crafted by AI and never repeated</p>
+            <p className="text-sm text-purple-400">Complete with stats, equipment, voice, and appearance</p>
           </div>
         )}
       </div>
