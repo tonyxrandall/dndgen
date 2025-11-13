@@ -106,28 +106,7 @@ const DnDGenerator = () => {
     }
   };
 
-  const traits = [
-    'Has an unusual fear of ordinary objects',
-    'Collects trophies from defeated enemies',
-    'Speaks in an unusual accent or dialect',
-    'Never backs down from a challenge',
-    'Keeps a detailed journal of every adventure',
-    'Has a lucky charm they refuse to be without',
-    'Tells tall tales about past exploits',
-    'Always helps those weaker than themselves',
-    'Harbors a secret that could ruin them',
-    'Dreams of a mysterious place they\'ve never been',
-    'Obsessed with a particular food or drink',
-    'Makes bad puns at inappropriate times',
-    'Extremely superstitious about specific omens',
-    'Can\'t resist a good mystery or puzzle',
-    'Has a rivalry with another adventurer',
-    'Prefers the company of animals to people',
-    'Always tries to negotiate before fighting',
-    'Has a distinctive laugh or mannerism',
-    'Keeps count of creatures they\'ve defeated',
-    'Seeks approval from a specific deity or mentor'
-  ];
+
 
   const generateName = (race) => {
     const names = namesByRace[race];
@@ -157,7 +136,7 @@ const DnDGenerator = () => {
     };
   };
 
-  const generateAIContent = async (name, race, charClass, trait, level, alignment, background, stats) => {
+  const generateAIContent = async (name, race, charClass, level, alignment, background, stats) => {
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -178,18 +157,20 @@ Class: ${charClass}
 Level: ${level}
 Alignment: ${alignment}
 Background: ${background}
-Personality Trait: ${trait}
 Stats: STR ${stats.strength}, DEX ${stats.dexterity}, CON ${stats.constitution}, INT ${stats.intelligence}, WIS ${stats.wisdom}, CHA ${stats.charisma}
 
 Generate the following in JSON format:
 {
   "backstory": "2-3 compelling sentences with specific details about their past",
+  "trait": "A unique, specific personality quirk or mannerism (be creative and original, never generic)",
   "equipment": ["item1", "item2", "item3", "item4", "item5"],
   "voiceAccent": "A creative description of how they speak (1 sentence)",
   "portrait": "A detailed visual description for AI art generation (2 sentences, be specific about appearance, clothing, pose, and mood)"
 }
 
-Make the backstory dramatic and incorporate their alignment and background. List 5 appropriate equipment items for their class and level. The voice/accent should match their background and personality. The portrait description should be vivid and specific.
+IMPORTANT: Make the personality trait completely unique and specific. Avoid generic traits. Think of unusual quirks, specific habits, or distinctive mannerisms that make this character memorable. Examples of good traits: "Collects buttons from every city they visit and sews them onto their cloak", "Refuses to make eye contact when lying, always looks at people's feet", "Hums sea shanties when nervous, even if they've never been to sea".
+
+Make the backstory dramatic and incorporate their alignment, background, and stats. List 5 appropriate equipment items for their class and level. The voice/accent should match their background and personality. The portrait description should be vivid and specific.
 
 Respond ONLY with valid JSON, no other text.`
             }
@@ -213,6 +194,7 @@ Respond ONLY with valid JSON, no other text.`
       console.error("Error generating content:", error);
       return {
         backstory: "A mysterious figure whose past remains shrouded in shadow, seeking purpose in a world full of danger and opportunity.",
+        trait: "Has a habit of overthinking simple decisions while making snap judgments on complex matters.",
         equipment: ["Backpack", "Bedroll", "Rations (5 days)", "Waterskin", "Rope (50 ft)"],
         voiceAccent: "Speaks with confidence and clarity.",
         portrait: "A determined adventurer standing ready for action. Their equipment is well-maintained and their posture suggests experience."
@@ -235,7 +217,6 @@ Respond ONLY with valid JSON, no other text.`
     const alignment = alignments[Math.floor(Math.random() * alignments.length)];
     const background = backgrounds[Math.floor(Math.random() * backgrounds.length)];
     const name = generateName(race);
-    const trait = traits[Math.floor(Math.random() * traits.length)];
     const stats = rollStats();
 
     // Set character immediately with loading state
@@ -251,14 +232,14 @@ Respond ONLY with valid JSON, no other text.`
       equipment: [],
       voiceAccent: "Determining voice...",
       portrait: "Envisioning appearance...",
-      trait,
+      trait: "Discovering personality...",
       loading: true
     });
 
     setGenerating(false);
 
     // Generate AI content in background
-    const aiContent = await generateAIContent(name, race, charClass, trait, level, alignment, background, stats);
+    const aiContent = await generateAIContent(name, race, charClass, level, alignment, background, stats);
     
     setCharacter({
       name,
@@ -272,7 +253,7 @@ Respond ONLY with valid JSON, no other text.`
       equipment: aiContent.equipment,
       voiceAccent: aiContent.voiceAccent,
       portrait: aiContent.portrait,
-      trait,
+      trait: aiContent.trait,
       loading: false
     });
   };
@@ -333,15 +314,14 @@ ${character.portrait}`;
       equipment: [],
       voiceAccent: "Determining voice...",
       portrait: "Envisioning appearance...",
+      trait: "Discovering personality...",
       loading: true
     });
 
-    const newTrait = traits[Math.floor(Math.random() * traits.length)];
     const aiContent = await generateAIContent(
       character.name,
       character.race,
       character.class,
-      newTrait,
       character.level,
       character.alignment,
       character.background,
@@ -354,7 +334,7 @@ ${character.portrait}`;
       equipment: aiContent.equipment,
       voiceAccent: aiContent.voiceAccent,
       portrait: aiContent.portrait,
-      trait: newTrait,
+      trait: aiContent.trait,
       loading: false
     });
   };
